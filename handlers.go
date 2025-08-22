@@ -179,5 +179,6 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/start", s.startHandler)
 	mux.HandleFunc("/stop", s.stopHandler)
 	mux.HandleFunc("/history", s.historyHandler)
+	mux.Handle("/", http.FileServer(http.Dir("ui")))
 	return mux
 }
