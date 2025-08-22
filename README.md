@@ -14,6 +14,12 @@ go build
 ./goWebU -db data.db -addr :8080
 ```
 
+## Web UI
+
+The server also hosts a tiny static interface for managing hosts and
+starting tunnels. Once running, open `http://localhost:8080/` in a web
+browser to access it.
+
 ### API Endpoints
 
 - `GET /hosts` list saved hosts

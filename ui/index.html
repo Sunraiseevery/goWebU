@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>goWebU GUI</title>
+</head>
+<body>
+<h1>goWebU</h1>
+<section>
+<h2>Hosts</h2>
+<button onclick="loadHosts()">Refresh</button>
+<ul id="hostList"></ul>
+<form id="hostForm">
+<input name="name" placeholder="Name">
+<input name="host" placeholder="Host">
+<input name="port" type="number" placeholder="Port" value="22">
+<input name="username" placeholder="Username">
+<select name="auth_type">
+<option value="password">password</option>
+<option value="key">key</option>
+</select>
+<input name="key_alias" placeholder="KeyAlias/Key">
+<button type="submit">Save</button>
+</form>
+</section>
+<section>
+<h2>Start Tunnel</h2>
+<form id="startForm">
+<select name="host_id" id="hostSelect"></select>
+<input name="lport" type="number" placeholder="Local Port" value="9000">
+<input name="rhost" placeholder="Remote Host" value="localhost">
+<input name="rport" type="number" placeholder="Remote Port" value="5432">
+<input name="password" type="password" placeholder="Password">
+<button type="submit">Start</button>
+</form>
+<div id="sessionId"></div>
+</section>
+<section>
+<h2>History</h2>
+<button onclick="loadHistory()">Refresh</button>
+<ul id="historyList"></ul>
+</section>
+<script>
+async function loadHosts(){
+ const res=await fetch('/hosts');
+ const hosts=await res.json();
+ const list=document.getElementById('hostList');
+ list.innerHTML='';
+ const sel=document.getElementById('hostSelect');
+ sel.innerHTML='';
+ hosts.forEach(h=>{
+  const li=document.createElement('li');
+  li.textContent=h.id+' '+h.username+'@'+h.host+':'+h.port;
+  list.appendChild(li);
+  const opt=document.createElement('option');
+  opt.value=h.id;
+  opt.textContent=li.textContent;
+  sel.appendChild(opt);
+ });
+}
+
+document.getElementById('hostForm').addEventListener('submit',async(e)=>{
+ e.preventDefault();
+ const f=e.target;
+ const payload={name:f.name.value,host:f.host.value,port:parseInt(f.port.value),username:f.username.value,auth_type:f.auth_type.value,key_alias:f.key_alias.value};
+ await fetch('/hosts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ f.reset();
+ loadHosts();
+});
+
+document.getElementById('startForm').addEventListener('submit',async(e)=>{
+ e.preventDefault();
+ const f=e.target;
+ const payload={host_id:parseInt(f.host_id.value),lport:parseInt(f.lport.value),rhost:f.rhost.value,rport:parseInt(f.rport.value),password:f.password.value};
+ const res=await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+ const data=await res.json();
+ document.getElementById('sessionId').textContent=data.session_id?('Session: '+data.session_id):('Error: '+data.error);
+});
+
+async function loadHistory(){
+ const res=await fetch('/history');
+ const list=await res.json();
+ const ul=document.getElementById('historyList');
+ ul.innerHTML='';
+ list.forEach(it=>{
+  const li=document.createElement('li');
+  li.textContent=it.raw;
+  ul.appendChild(li);
+ });
+}
+
+loadHosts();
+loadHistory();
+</script>
+</body>
+</html>
