@@ -10,7 +10,9 @@ import (
 	"runtime"
 	"time"
 
+
 	"goWebU/app"
+
 )
 
 func main() {
@@ -28,6 +30,7 @@ func main() {
 	}
 
 	srv := app.NewServer(db)
+
 
 	go func() {
 		// Allow the server a brief moment to start before opening the browser.
