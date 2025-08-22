@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"database/sql"
@@ -173,7 +173,7 @@ func NewServer(db *sql.DB) *Server {
 	}
 }
 
-func (s *Server) routes() http.Handler {
+func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/hosts", s.hostsHandler)
 	mux.HandleFunc("/start", s.startHandler)
