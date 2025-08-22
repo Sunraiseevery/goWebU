@@ -14,6 +14,12 @@ go build
 ./goWebU -db data.db -addr :8080
 ```
 
+Or run without building:
+
+```
+go run . -db data.db -addr :8080
+```
+
 When the server starts, it will attempt to open your default browser to
 `http://localhost:8080/`. If it does not open automatically, you can
 manually visit the URL.
