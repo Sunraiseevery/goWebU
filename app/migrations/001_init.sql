@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS hosts (
   username     TEXT NOT NULL,
   auth_type    TEXT NOT NULL CHECK (auth_type IN ('password','key')),
   key_alias    TEXT,
+  password     TEXT,
   note         TEXT,
   created_at   TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at   TEXT NOT NULL DEFAULT (datetime('now')),

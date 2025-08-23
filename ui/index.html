@@ -2,44 +2,46 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>goWebU GUI</title>
+<title>goWebU 图形界面</title>
 </head>
 <body>
-<a href="index.zh.html">中文</a>
-
 <h1>goWebU</h1>
+<p>用于管理和启动 SSH 隧道的简易界面。</p>
 <section>
-<h2>Hosts</h2>
-<button onclick="loadHosts()">Refresh</button>
+<h2>主机</h2>
+<p>在此保存 SSH 主机及凭据，密码或密钥二选一。</p>
+<button onclick="loadHosts()">刷新</button>
 <ul id="hostList"></ul>
 <form id="hostForm">
-<input name="name" placeholder="Name">
-<input name="host" placeholder="Host">
-<input name="port" type="number" placeholder="Port" value="22">
-<input name="username" placeholder="Username">
+<input name="name" placeholder="名称">
+<input name="host" placeholder="主机">
+<input name="port" type="number" placeholder="端口" value="22">
+<input name="username" placeholder="用户名">
 <select name="auth_type">
-<option value="password">password</option>
-<option value="key">key</option>
+<option value="password">密码</option>
+<option value="key">密钥</option>
 </select>
-<input name="key_alias" placeholder="KeyAlias/Key">
-<button type="submit">Save</button>
+<input name="key_alias" placeholder="密钥别名/密钥">
+<input name="password" type="password" placeholder="密码">
+<button type="submit">保存</button>
 </form>
 </section>
 <section>
-<h2>Start Tunnel</h2>
+<h2>启动隧道</h2>
+<p>选择上方的主机并填写端口信息，点击启动建立隧道。</p>
 <form id="startForm">
 <select name="host_id" id="hostSelect"></select>
-<input name="lport" type="number" placeholder="Local Port" value="9000">
-<input name="rhost" placeholder="Remote Host" value="localhost">
-<input name="rport" type="number" placeholder="Remote Port" value="5432">
-<input name="password" type="password" placeholder="Password">
-<button type="submit">Start</button>
+<input name="lport" type="number" placeholder="本地端口" value="9000">
+<input name="rhost" placeholder="远程主机" value="localhost">
+<input name="rport" type="number" placeholder="远程端口" value="5432">
+<button type="submit">启动</button>
 </form>
 <div id="sessionId"></div>
 </section>
 <section>
-<h2>History</h2>
-<button onclick="loadHistory()">Refresh</button>
+<h2>历史</h2>
+<p>仅显示已成功连接的隧道记录。</p>
+<button onclick="loadHistory()">刷新</button>
 <ul id="historyList"></ul>
 </section>
 <script>
@@ -64,7 +66,7 @@ async function loadHosts(){
 document.getElementById('hostForm').addEventListener('submit',async(e)=>{
  e.preventDefault();
  const f=e.target;
- const payload={name:f.name.value,host:f.host.value,port:parseInt(f.port.value),username:f.username.value,auth_type:f.auth_type.value,key_alias:f.key_alias.value};
+ const payload={name:f.name.value,host:f.host.value,port:parseInt(f.port.value),username:f.username.value,auth_type:f.auth_type.value,key_alias:f.key_alias.value,password:f.password.value};
  await fetch('/hosts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  f.reset();
  loadHosts();
@@ -73,10 +75,10 @@ document.getElementById('hostForm').addEventListener('submit',async(e)=>{
 document.getElementById('startForm').addEventListener('submit',async(e)=>{
  e.preventDefault();
  const f=e.target;
- const payload={host_id:parseInt(f.host_id.value),lport:parseInt(f.lport.value),rhost:f.rhost.value,rport:parseInt(f.rport.value),password:f.password.value};
+ const payload={host_id:parseInt(f.host_id.value),lport:parseInt(f.lport.value),rhost:f.rhost.value,rport:parseInt(f.rport.value)};
  const res=await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  const data=await res.json();
- document.getElementById('sessionId').textContent=data.session_id?('Session: '+data.session_id):('Error: '+data.error);
+ document.getElementById('sessionId').textContent=data.session_id?('会话: '+data.session_id):('错误: '+data.error);
 });
 
 async function loadHistory(){

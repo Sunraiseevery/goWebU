@@ -58,16 +58,10 @@ func (s *Server) hostsHandler(w http.ResponseWriter, r *http.Request) {
 
 // StartReq defines request for starting a tunnel.
 type StartReq struct {
-	HostID   *int64 `json:"host_id"`
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	Username string `json:"username"`
-	AuthType string `json:"auth_type"`
-	KeyAlias string `json:"key_alias"`
-	Password string `json:"password"`
-	LPort    int    `json:"lport"`
-	RHost    string `json:"rhost"`
-	RPort    int    `json:"rport"`
+	HostID int64  `json:"host_id"`
+	LPort  int    `json:"lport"`
+	RHost  string `json:"rhost"`
+	RPort  int    `json:"rport"`
 }
 
 func (s *Server) buildAuth(authType, password, keyAlias string) (ssh.AuthMethod, error) {
@@ -97,38 +91,22 @@ func (s *Server) startHandler(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	var hostID int64
-	if req.HostID != nil {
-		hostID = *req.HostID
-	} else {
-		h := &Host{
-			Name:     req.Username + "@" + req.Host,
-			Host:     req.Host,
-			Port:     req.Port,
-			Username: req.Username,
-			AuthType: req.AuthType,
-			KeyAlias: req.KeyAlias,
-		}
-		id, err := s.Hosts.Upsert(ctx, h)
-		if err != nil {
-			writeErr(w, err)
-			return
-		}
-		hostID = id
+	h, err := s.Hosts.Get(ctx, req.HostID)
+	if err != nil {
+		writeErr(w, err)
+		return
 	}
-	auth, err := s.buildAuth(req.AuthType, req.Password, req.KeyAlias)
+	auth, err := s.buildAuth(h.AuthType, h.Password, h.KeyAlias)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	sessID := uuid.NewString()
-	if err := s.Sessions.Start(ctx, sessID, hostID); err != nil {
+	if err := s.Sessions.Start(ctx, sessID, h.ID); err != nil {
 		writeErr(w, err)
 		return
 	}
-	raw := BuildSSHCommandLine(req.LPort, req.RHost, req.RPort, req.Username, req.Host)
-	_ = s.History.Add(ctx, &CommandHistory{SessionID: sessID, HostID: sql.NullInt64{Int64: hostID, Valid: true}, Raw: raw})
-	err = s.TunMgr.Start(sessID, req.Host, req.Port, req.Username, auth, req.LPort, req.RHost, req.RPort, func(level, msg string) {
+	err = s.TunMgr.Start(sessID, h.Host, h.Port, h.Username, auth, req.LPort, req.RHost, req.RPort, func(level, msg string) {
 		_ = s.Events.Add(ctx, sessID, level, msg)
 	})
 	if err != nil {
@@ -137,6 +115,8 @@ func (s *Server) startHandler(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	raw := BuildSSHCommandLine(req.LPort, req.RHost, req.RPort, h.Username, h.Host)
+	_ = s.History.Add(ctx, &CommandHistory{SessionID: sessID, HostID: sql.NullInt64{Int64: h.ID, Valid: true}, Raw: raw})
 	writeJSON(w, map[string]any{"session_id": sessID})
 }
 
