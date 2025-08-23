@@ -15,6 +15,7 @@ type Host struct {
 	Username  string `json:"username"`
 	AuthType  string `json:"auth_type"`
 	KeyAlias  string `json:"key_alias"`
+	Password  string `json:"password"`
 	Note      string `json:"note"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
@@ -24,15 +25,16 @@ type HostsRepo struct{ DB *sql.DB }
 
 func (r *HostsRepo) Upsert(ctx context.Context, h *Host) (int64, error) {
 	res, err := r.DB.ExecContext(ctx, `
-        INSERT INTO hosts(name,host,port,username,auth_type,key_alias,note)
-        VALUES(?,?,?,?,?,?,?)
+        INSERT INTO hosts(name,host,port,username,auth_type,key_alias,password,note)
+        VALUES(?,?,?,?,?,?,?,?)
         ON CONFLICT(host,port,username) DO UPDATE SET
           name=excluded.name,
           auth_type=excluded.auth_type,
           key_alias=excluded.key_alias,
+          password=excluded.password,
           note=excluded.note,
           updated_at=datetime('now')
-    `, h.Name, h.Host, h.Port, h.Username, h.AuthType, h.KeyAlias, h.Note)
+    `, h.Name, h.Host, h.Port, h.Username, h.AuthType, h.KeyAlias, h.Password, h.Note)
 	if err != nil {
 		return 0, err
 	}
@@ -47,7 +49,7 @@ func (r *HostsRepo) Upsert(ctx context.Context, h *Host) (int64, error) {
 }
 
 func (r *HostsRepo) List(ctx context.Context) ([]Host, error) {
-	rows, err := r.DB.QueryContext(ctx, `SELECT id,name,host,port,username,auth_type,key_alias,note,created_at,updated_at FROM hosts ORDER BY id`)
+	rows, err := r.DB.QueryContext(ctx, `SELECT id,name,host,port,username,auth_type,key_alias,password,note,created_at,updated_at FROM hosts ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -55,12 +57,22 @@ func (r *HostsRepo) List(ctx context.Context) ([]Host, error) {
 	var res []Host
 	for rows.Next() {
 		var h Host
-		if err := rows.Scan(&h.ID, &h.Name, &h.Host, &h.Port, &h.Username, &h.AuthType, &h.KeyAlias, &h.Note, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		if err := rows.Scan(&h.ID, &h.Name, &h.Host, &h.Port, &h.Username, &h.AuthType, &h.KeyAlias, &h.Password, &h.Note, &h.CreatedAt, &h.UpdatedAt); err != nil {
 			return nil, err
 		}
 		res = append(res, h)
 	}
 	return res, rows.Err()
+}
+
+func (r *HostsRepo) Get(ctx context.Context, id int64) (*Host, error) {
+	var h Host
+	err := r.DB.QueryRowContext(ctx, `SELECT id,name,host,port,username,auth_type,key_alias,password,note,created_at,updated_at FROM hosts WHERE id=?`, id).
+		Scan(&h.ID, &h.Name, &h.Host, &h.Port, &h.Username, &h.AuthType, &h.KeyAlias, &h.Password, &h.Note, &h.CreatedAt, &h.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &h, nil
 }
 
 // CommandHistory represents a command record.

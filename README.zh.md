@@ -1,6 +1,6 @@
 # goWebU
 
-[English](README.md) | [中文](README.zh.md)
+此项目当前只维护中文文档和界面。
 
 简单的 SSH 端口转发服务，使用 SQLite 存储主机记录和命令历史。
 
