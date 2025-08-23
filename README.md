@@ -1,5 +1,8 @@
 # goWebU
 
+[English](README.md) | [中文](README.zh.md)
+
+
 Simple SSH port forwarding service with SQLite-backed host records and command history.
 
 ## Building
