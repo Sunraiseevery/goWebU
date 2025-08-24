@@ -47,7 +47,7 @@ func (t *Tunnel) StartForward(lport int, rhost string, rport int) error {
 		return fmt.Errorf("ssh connection not established")
 	}
 	localAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(lport))
-	ln, err := net.Listen("tcp", localAddr)
+	ln, err := listenLocal(localAddr)
 	if err != nil {
 		return err
 	}
