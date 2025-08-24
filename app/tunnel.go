@@ -96,6 +96,16 @@ func (t *Tunnel) forward(lconn net.Conn, rhost string, rport int) {
 	wg.Wait()
 }
 
+// Alive checks if the underlying SSH connection is still active by sending
+// a keepalive request. It returns false if the connection is lost.
+func (t *Tunnel) Alive() bool {
+	if t.client == nil {
+		return false
+	}
+	_, _, err := t.client.SendRequest("keepalive@openssh.com", true, nil)
+	return err == nil
+}
+
 // Stop shuts down any active forwarding and SSH connection.
 func (t *Tunnel) Stop() {
 	if t.listener != nil {
@@ -131,6 +141,20 @@ func (tm *TunnelManager) Connect(sessionID string, host string, port int, user s
 		tm.Stop(sessionID)
 		return err
 	}
+
+	// Watch for connection closure and cleanup automatically.
+	go func() {
+		err := t.client.Conn.Wait()
+		if onEvent != nil {
+			if err != nil {
+				onEvent("error", err.Error())
+			} else {
+				onEvent("info", "ssh disconnected")
+			}
+		}
+		tm.Stop(sessionID)
+	}()
+
 	return nil
 }
 
@@ -162,4 +186,20 @@ func (tm *TunnelManager) Stop(sessionID string) {
 	if t != nil {
 		t.Stop()
 	}
+}
+
+// Alive reports whether the session's SSH connection is still active. If the
+// connection has been lost, the session is removed and false is returned.
+func (tm *TunnelManager) Alive(sessionID string) bool {
+	tm.mu.Lock()
+	t, ok := tm.m[sessionID]
+	tm.mu.Unlock()
+	if !ok {
+		return false
+	}
+	if !t.Alive() {
+		tm.Stop(sessionID)
+		return false
+	}
+	return true
 }
