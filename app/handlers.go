@@ -149,6 +149,22 @@ func (s *Server) stopHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"stopped": true})
 }
 
+func (s *Server) statusHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeErr(w, err)
+		return
+	}
+	alive := s.TunMgr.Alive(req.SessionID)
+	if !alive {
+		_ = s.Sessions.Stop(ctx, req.SessionID, "closed", nil)
+	}
+	writeJSON(w, map[string]any{"alive": alive})
+}
+
 func (s *Server) historyHandler(w http.ResponseWriter, r *http.Request) {
 	list, err := s.History.List(r.Context(), 50)
 	if err != nil {
@@ -173,6 +189,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/hosts", s.hostsHandler)
 	mux.HandleFunc("/start", s.startHandler)
 	mux.HandleFunc("/stop", s.stopHandler)
+	mux.HandleFunc("/status", s.statusHandler)
 	mux.HandleFunc("/history", s.historyHandler)
 	mux.Handle("/", http.FileServer(http.Dir("ui")))
 	return mux

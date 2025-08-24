@@ -39,6 +39,15 @@
 <div id="sessionId"></div>
 </section>
 <section>
+<h2>会话管理</h2>
+<form id="sessionForm">
+<input name="session_id" placeholder="会话ID">
+<button type="submit">状态</button>
+<button type="button" onclick="stopSession()">停止</button>
+</form>
+<div id="sessionStatus"></div>
+</section>
+<section>
 <h2>历史</h2>
 <p>仅显示已成功连接的隧道记录。</p>
 <button onclick="loadHistory()">刷新</button>
@@ -80,6 +89,21 @@ document.getElementById('startForm').addEventListener('submit',async(e)=>{
  const data=await res.json();
  document.getElementById('sessionId').textContent=data.session_id?('会话: '+data.session_id):('错误: '+data.error);
 });
+
+document.getElementById('sessionForm').addEventListener('submit',async(e)=>{
+ e.preventDefault();
+ const id=e.target.session_id.value;
+ const res=await fetch('/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:id})});
+ const data=await res.json();
+ document.getElementById('sessionStatus').textContent=data.alive?'连接正常':'连接已断开';
+});
+
+async function stopSession(){
+ const f=document.getElementById('sessionForm');
+ const id=f.session_id.value;
+ await fetch('/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:id})});
+ document.getElementById('sessionStatus').textContent='已停止';
+}
 
 async function loadHistory(){
  const res=await fetch('/history');
