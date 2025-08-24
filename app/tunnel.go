@@ -1,9 +1,11 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"sync"
 
 	"golang.org/x/crypto/ssh"
@@ -20,20 +22,33 @@ func NewTunnel(onEvent func(level, msg string)) *Tunnel {
 	return &Tunnel{onEvent: onEvent}
 }
 
-func (t *Tunnel) Start(host string, port int, user string, auth ssh.AuthMethod, lport int, rhost string, rport int) error {
+// Connect establishes the SSH connection to the remote host.
+func (t *Tunnel) Connect(host string, port int, user string, auth ssh.AuthMethod) error {
 	conf := &ssh.ClientConfig{
 		User:            user,
 		Auth:            []ssh.AuthMethod{auth},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
-	c, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", host, port), conf)
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
+	c, err := ssh.Dial("tcp", addr, conf)
 	if err != nil {
 		return err
 	}
 	t.client = c
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", lport))
+	if t.onEvent != nil {
+		t.onEvent("info", fmt.Sprintf("ssh connected to %s", addr))
+	}
+	return nil
+}
+
+// StartForward begins forwarding a local port to the remote host.
+func (t *Tunnel) StartForward(lport int, rhost string, rport int) error {
+	if t.client == nil {
+		return fmt.Errorf("ssh connection not established")
+	}
+	localAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(lport))
+	ln, err := net.Listen("tcp", localAddr)
 	if err != nil {
-		c.Close()
 		return err
 	}
 	t.listener = ln
@@ -45,6 +60,9 @@ func (t *Tunnel) acceptLoop(rhost string, rport int) {
 	for {
 		conn, err := t.listener.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			if t.onEvent != nil {
 				t.onEvent("error", err.Error())
 			}
@@ -56,7 +74,8 @@ func (t *Tunnel) acceptLoop(rhost string, rport int) {
 
 func (t *Tunnel) forward(lconn net.Conn, rhost string, rport int) {
 	defer lconn.Close()
-	rconn, err := t.client.Dial("tcp", fmt.Sprintf("%s:%d", rhost, rport))
+	raddr := net.JoinHostPort(rhost, strconv.Itoa(rport))
+	rconn, err := t.client.Dial("tcp", raddr)
 	if err != nil {
 		if t.onEvent != nil {
 			t.onEvent("error", err.Error())
@@ -77,6 +96,7 @@ func (t *Tunnel) forward(lconn net.Conn, rhost string, rport int) {
 	wg.Wait()
 }
 
+// Stop shuts down any active forwarding and SSH connection.
 func (t *Tunnel) Stop() {
 	if t.listener != nil {
 		t.listener.Close()
@@ -96,23 +116,44 @@ func NewTunnelManager() *TunnelManager {
 	return &TunnelManager{m: make(map[string]*Tunnel)}
 }
 
-func (tm *TunnelManager) Start(sessionID string, host string, port int, user string, auth ssh.AuthMethod, lport int, rhost string, rport int, onEvent func(level, msg string)) error {
+// Connect creates a session and establishes the SSH connection.
+func (tm *TunnelManager) Connect(sessionID string, host string, port int, user string, auth ssh.AuthMethod, onEvent func(level, msg string)) error {
 	tm.mu.Lock()
-	defer tm.mu.Unlock()
 	if _, ok := tm.m[sessionID]; ok {
+		tm.mu.Unlock()
 		return fmt.Errorf("session exists")
 	}
 	t := NewTunnel(onEvent)
-	if err := t.Start(host, port, user, auth, lport, rhost, rport); err != nil {
-		return err
-	}
 	tm.m[sessionID] = t
-	if onEvent != nil {
-		onEvent("info", fmt.Sprintf("tunnel started 127.0.0.1:%d -> %s:%d", lport, rhost, rport))
+	tm.mu.Unlock()
+
+	if err := t.Connect(host, port, user, auth); err != nil {
+		tm.Stop(sessionID)
+		return err
 	}
 	return nil
 }
 
+// Forward starts port forwarding on an existing session.
+func (tm *TunnelManager) Forward(sessionID string, lport int, rhost string, rport int) error {
+	tm.mu.Lock()
+	t, ok := tm.m[sessionID]
+	tm.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("session not found")
+	}
+	if err := t.StartForward(lport, rhost, rport); err != nil {
+		return err
+	}
+	if t.onEvent != nil {
+		lAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(lport))
+		rAddr := net.JoinHostPort(rhost, strconv.Itoa(rport))
+		t.onEvent("info", fmt.Sprintf("tunnel started %s -> %s", lAddr, rAddr))
+	}
+	return nil
+}
+
+// Stop terminates a session and cleans up resources.
 func (tm *TunnelManager) Stop(sessionID string) {
 	tm.mu.Lock()
 	t := tm.m[sessionID]
