@@ -12,9 +12,16 @@ import (
 )
 
 // Tunnel represents a single SSH tunnel.
+type forward struct {
+	listener net.Listener
+	rhost    string
+	rport    int
+}
+
+// Tunnel represents a single SSH tunnel.
 type Tunnel struct {
 	client   *ssh.Client
-	listener net.Listener
+	forwards []forward
 	onEvent  func(level, msg string)
 }
 
@@ -51,14 +58,15 @@ func (t *Tunnel) StartForward(lport int, rhost string, rport int) error {
 	if err != nil {
 		return err
 	}
-	t.listener = ln
-	go t.acceptLoop(rhost, rport)
+	f := forward{listener: ln, rhost: rhost, rport: rport}
+	t.forwards = append(t.forwards, f)
+	go t.acceptLoop(f)
 	return nil
 }
 
-func (t *Tunnel) acceptLoop(rhost string, rport int) {
+func (t *Tunnel) acceptLoop(f forward) {
 	for {
-		conn, err := t.listener.Accept()
+		conn, err := f.listener.Accept()
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				return
@@ -68,7 +76,7 @@ func (t *Tunnel) acceptLoop(rhost string, rport int) {
 			}
 			return
 		}
-		go t.forward(conn, rhost, rport)
+		go t.forward(conn, f.rhost, f.rport)
 	}
 }
 
@@ -83,27 +91,27 @@ func (t *Tunnel) forward(lconn net.Conn, rhost string, rport int) {
 		return
 	}
 	defer rconn.Close()
-       var wg sync.WaitGroup
-       wg.Add(2)
-       // Copy data from remote to local. When copying finishes, close the
-       // write side of the local connection to signal EOF to the client.
-       go func() {
-               defer wg.Done()
-               io.Copy(lconn, rconn)
-               if cw, ok := lconn.(interface{ CloseWrite() error }); ok {
-                       _ = cw.CloseWrite()
-               }
-       }()
-       // Copy data from local to remote. Likewise close the write side of the
-       // remote connection when done to mirror ssh -L behavior.
-       go func() {
-               defer wg.Done()
-               io.Copy(rconn, lconn)
-               if cw, ok := rconn.(interface{ CloseWrite() error }); ok {
-                       _ = cw.CloseWrite()
-               }
-       }()
-       wg.Wait()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	// Copy data from remote to local. When copying finishes, close the
+	// write side of the local connection to signal EOF to the client.
+	go func() {
+		defer wg.Done()
+		io.Copy(lconn, rconn)
+		if cw, ok := lconn.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
+		}
+	}()
+	// Copy data from local to remote. Likewise close the write side of the
+	// remote connection when done to mirror ssh -L behavior.
+	go func() {
+		defer wg.Done()
+		io.Copy(rconn, lconn)
+		if cw, ok := rconn.(interface{ CloseWrite() error }); ok {
+			_ = cw.CloseWrite()
+		}
+	}()
+	wg.Wait()
 }
 
 // Alive checks if the underlying SSH connection is still active by sending
@@ -118,9 +126,12 @@ func (t *Tunnel) Alive() bool {
 
 // Stop shuts down any active forwarding and SSH connection.
 func (t *Tunnel) Stop() {
-	if t.listener != nil {
-		t.listener.Close()
+	for _, f := range t.forwards {
+		if f.listener != nil {
+			f.listener.Close()
+		}
 	}
+	t.forwards = nil
 	if t.client != nil {
 		t.client.Close()
 	}

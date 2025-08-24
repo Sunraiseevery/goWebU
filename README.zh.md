@@ -3,6 +3,7 @@
 此项目当前只维护中文文档和界面。
 
 简单的 SSH 端口转发服务，使用 SQLite 存储主机记录和命令历史。
+单个会话可同时转发多个本地端口到不同的远程目标。
 
 ## 构建
 
@@ -32,6 +33,16 @@ go run . -db data.db -addr :8080
 
 - `GET /hosts` 列出保存的主机
 - `POST /hosts` 添加或更新主机
-- `POST /start` 启动新隧道（记录命令历史）
+- `POST /start` 启动新隧道，示例请求：
+
+```json
+{
+  "host_id": 1,
+  "forwards": [
+    {"lport": 9000, "rhost": "localhost", "rport": 5432},
+    {"lport": 9001, "rhost": "localhost", "rport": 5433}
+  ]
+}
+```
 - `POST /stop` 停止运行中的隧道
 - `GET /history` 列出最近的命令历史
