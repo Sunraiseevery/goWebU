@@ -3,6 +3,7 @@ package app
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -24,8 +25,14 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 }
 
 func writeErr(w http.ResponseWriter, err error) {
-	w.WriteHeader(http.StatusBadRequest)
-	writeJSON(w, map[string]any{"error": err.Error()})
+	status := http.StatusBadRequest
+	msg := err.Error()
+	if errors.Is(err, sql.ErrNoRows) {
+		status = http.StatusNotFound
+		msg = "no matching record found in the database (sql: no rows in result set)"
+	}
+	w.WriteHeader(status)
+	writeJSON(w, map[string]any{"error": msg})
 }
 
 func (s *Server) hostsHandler(w http.ResponseWriter, r *http.Request) {
@@ -106,10 +113,18 @@ func (s *Server) startHandler(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	err = s.TunMgr.Start(sessID, h.Host, h.Port, h.Username, auth, req.LPort, req.RHost, req.RPort, func(level, msg string) {
+	err = s.TunMgr.Connect(sessID, h.Host, h.Port, h.Username, auth, func(level, msg string) {
 		_ = s.Events.Add(ctx, sessID, level, msg)
 	})
 	if err != nil {
+		msg := err.Error()
+		_ = s.Sessions.Stop(ctx, sessID, "error", &msg)
+		writeErr(w, err)
+		return
+	}
+	err = s.TunMgr.Forward(sessID, req.LPort, req.RHost, req.RPort)
+	if err != nil {
+		s.TunMgr.Stop(sessID)
 		msg := err.Error()
 		_ = s.Sessions.Stop(ctx, sessID, "error", &msg)
 		writeErr(w, err)
