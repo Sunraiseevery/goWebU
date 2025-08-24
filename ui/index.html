@@ -31,9 +31,14 @@
 <p>选择上方的主机并填写端口信息，点击启动建立隧道。</p>
 <form id="startForm">
 <select name="host_id" id="hostSelect"></select>
-<input name="lport" type="number" placeholder="本地端口" value="9000">
-<input name="rhost" placeholder="远程主机" value="localhost">
-<input name="rport" type="number" placeholder="远程端口" value="5432">
+<div id="forwardList">
+ <div class="forward">
+  <label>本地端口 <input name="lport" type="number" value="9000"></label>
+  <label>远程主机 <input name="rhost" value="localhost"></label>
+  <label>远程端口 <input name="rport" type="number" value="5432"></label>
+ </div>
+</div>
+<button type="button" onclick="addForward()">添加端口</button>
 <button type="submit">启动</button>
 </form>
 <div id="sessionId"></div>
@@ -84,11 +89,26 @@ document.getElementById('hostForm').addEventListener('submit',async(e)=>{
 document.getElementById('startForm').addEventListener('submit',async(e)=>{
  e.preventDefault();
  const f=e.target;
- const payload={host_id:parseInt(f.host_id.value),lport:parseInt(f.lport.value),rhost:f.rhost.value,rport:parseInt(f.rport.value)};
+ const forwards=[];
+ document.querySelectorAll('#forwardList .forward').forEach(row=>{
+  forwards.push({
+   lport:parseInt(row.querySelector('input[name="lport"]').value),
+   rhost:row.querySelector('input[name="rhost"]').value,
+   rport:parseInt(row.querySelector('input[name="rport"]').value)
+  });
+ });
+ const payload={host_id:parseInt(f.host_id.value),forwards:forwards};
  const res=await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
  const data=await res.json();
  document.getElementById('sessionId').textContent=data.session_id?('会话: '+data.session_id):('错误: '+data.error);
 });
+
+function addForward(){
+ const div=document.createElement('div');
+ div.className='forward';
+ div.innerHTML='<label>本地端口 <input name="lport" type="number" value="9000"></label> <label>远程主机 <input name="rhost" value="localhost"></label> <label>远程端口 <input name="rport" type="number" value="5432"></label>';
+ document.getElementById('forwardList').appendChild(div);
+}
 
 document.getElementById('sessionForm').addEventListener('submit',async(e)=>{
  e.preventDefault();

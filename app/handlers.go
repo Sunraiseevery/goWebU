@@ -63,12 +63,21 @@ func (s *Server) hostsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// StartReq defines request for starting a tunnel.
+// ForwardReq describes a single port forward.
+type ForwardReq struct {
+	LPort int    `json:"lport"`
+	RHost string `json:"rhost"`
+	RPort int    `json:"rport"`
+}
+
+// StartReq defines request for starting one or more forwards.
 type StartReq struct {
-	HostID int64  `json:"host_id"`
-	LPort  int    `json:"lport"`
-	RHost  string `json:"rhost"`
-	RPort  int    `json:"rport"`
+	HostID   int64        `json:"host_id"`
+	Forwards []ForwardReq `json:"forwards"`
+	// Backward compatibility fields.
+	LPort int    `json:"lport"`
+	RHost string `json:"rhost"`
+	RPort int    `json:"rport"`
 }
 
 func (s *Server) buildAuth(authType, password, keyAlias string) (ssh.AuthMethod, error) {
@@ -122,16 +131,21 @@ func (s *Server) startHandler(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	err = s.TunMgr.Forward(sessID, req.LPort, req.RHost, req.RPort)
-	if err != nil {
-		s.TunMgr.Stop(sessID)
-		msg := err.Error()
-		_ = s.Sessions.Stop(ctx, sessID, "error", &msg)
-		writeErr(w, err)
-		return
+	forwards := req.Forwards
+	if len(forwards) == 0 && req.LPort != 0 {
+		forwards = []ForwardReq{{LPort: req.LPort, RHost: req.RHost, RPort: req.RPort}}
 	}
-	raw := BuildSSHCommandLine(req.LPort, req.RHost, req.RPort, h.Username, h.Host)
-	_ = s.History.Add(ctx, &CommandHistory{SessionID: sessID, HostID: sql.NullInt64{Int64: h.ID, Valid: true}, Raw: raw})
+	for _, fwd := range forwards {
+		if err = s.TunMgr.Forward(sessID, fwd.LPort, fwd.RHost, fwd.RPort); err != nil {
+			s.TunMgr.Stop(sessID)
+			msg := err.Error()
+			_ = s.Sessions.Stop(ctx, sessID, "error", &msg)
+			writeErr(w, err)
+			return
+		}
+		raw := BuildSSHCommandLine(fwd.LPort, fwd.RHost, fwd.RPort, h.Username, h.Host)
+		_ = s.History.Add(ctx, &CommandHistory{SessionID: sessID, HostID: sql.NullInt64{Int64: h.ID, Valid: true}, Raw: raw})
+	}
 	writeJSON(w, map[string]any{"session_id": sessID})
 }
 

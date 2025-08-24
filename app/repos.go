@@ -81,7 +81,7 @@ type CommandHistory struct {
 	SessionID string        `json:"session_id"`
 	HostID    sql.NullInt64 `json:"host_id"`
 	ForwardID sql.NullInt64 `json:"forward_id"`
-	Raw       string        `json:"raw_command"`
+	Raw       string        `json:"raw"`
 	CreatedAt string        `json:"created_at"`
 }
 
